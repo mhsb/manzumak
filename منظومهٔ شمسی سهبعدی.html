@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>منظومهٔ شمسی سه‌بعدی</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;700&display=swap">
+<style>
+:root{color-scheme:dark;--bg:#060919;--panel:rgba(12,17,42,.82);--line:rgba(160,185,255,.22);--text:#eaf0ff;--dim:#9fb0d8;--sun:#ffb347;--sky:#5ec2ff;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:Vazirmatn,Tahoma,"Segoe UI",sans-serif;overflow:hidden}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+canvas:active{cursor:grabbing}
+.lbl{position:fixed;left:0;top:0;font-size:12px;color:#fff;text-shadow:0 0 4px #000,0 0 8px #000;pointer-events:none;white-space:nowrap;transform:translate(-50%,-140%)}
+#hud{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);right:12px;left:12px;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+#hud h1{margin:0;font-size:20px}
+#info{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 14px;max-width:420px;line-height:1.9;font-size:14px;backdrop-filter:blur(6px)}
+#info b{color:var(--sun)}
+#info .why{color:var(--dim);font-size:13px;line-height:1.8;margin-top:4px}
+#bar{position:fixed;right:0;left:0;bottom:0;padding:10px 10px calc(env(safe-area-inset-bottom,0px) + 10px);display:flex;flex-wrap:wrap;gap:8px 14px;justify-content:center;background:linear-gradient(transparent,rgba(6,9,25,.9) 35%)}
+.grp{display:flex;gap:6px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:5px 8px}
+.grp span{font-size:12px;color:var(--dim)}
+button{font:inherit;font-size:14px;color:var(--text);background:rgba(94,194,255,.12);border:1px solid var(--line);border-radius:10px;padding:7px 12px;min-height:38px;cursor:pointer}
+button:hover{background:rgba(94,194,255,.25)}
+button[aria-pressed="true"],button.on{background:var(--sky);color:#04122a;border-color:var(--sky);font-weight:700}
+button:focus-visible{outline:2px solid var(--sun);outline-offset:2px}
+@media (max-width:600px){#hud h1{font-size:17px}button{padding:6px 9px;font-size:13px}#info{font-size:13px}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="labels"></div>
+<div id="hud">
+  <h1>منظومهٔ شمسی</h1>
+  <div id="info">
+    <div>تاریخ: <b id="date"></b></div>
+    <div>شمالی: <b id="sN"></b> · جنوبی: <b id="sS"></b></div>
+    <div>نقطهٔ قرمز روی زمین: <b id="dot"></b></div>
+    <div class="why" id="why"></div>
+  </div>
+</div>
+<div id="bar">
+  <div class="grp"><span>نما</span><button id="vAll" class="on">کل منظومه</button><button id="vEarth">زوم روی زمین</button><button id="vSide">از کنار</button></div>
+  <div class="grp"><span>سرعت</span><button id="s0">روز</button><button id="s1">ماه</button><button id="s2" class="on">سال</button><button id="sp" aria-pressed="false">توقف</button></div>
+  <div class="grp"><span>برو به</span><button data-q="0">تابستان</button><button data-q="1">پاییز</button><button data-q="2">زمستان</button><button data-q="3">بهار</button></div>
+  <div class="grp"><button id="tAxis" aria-pressed="false">محور زمین</button><button id="tOrb" aria-pressed="true">مدارها</button></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const canvas=$('c');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(50,1,.1,1200);
+
+/* stars */
+(function(){const n=1500,a=new Float32Array(n*3);for(let i=0;i<n;i++){const v=new THREE.Vector3().randomDirection?0:0;const u=Math.random()*2-1,t=Math.random()*6.283,r=Math.sqrt(1-u*u);a.set([r*Math.cos(t)*500,u*500,r*Math.sin(t)*500],i*3)}
+const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(a,3));
+scene.add(new THREE.Points(g,new THREE.PointsMaterial({color:0xffffff,size:1.4,sizeAttenuation:false})))})();
+
+/* sun */
+const sun=new THREE.Mesh(new THREE.SphereGeometry(6,48,32),new THREE.MeshBasicMaterial({color:0xffc247}));
+scene.add(sun);
+(function(){const c=document.createElement('canvas');c.width=c.height=128;const x=c.getContext('2d');const g=x.createRadialGradient(64,64,10,64,64,64);
+g.addColorStop(0,'rgba(255,200,90,.9)');g.addColorStop(.35,'rgba(255,150,40,.3)');g.addColorStop(1,'rgba(255,120,0,0)');x.fillStyle=g;x.fillRect(0,0,128,128);
+const s=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),blending:THREE.AdditiveBlending,depthWrite:false}));s.scale.set(26,26,1);sun.add(s)})();
+scene.add(new THREE.PointLight(0xffffff,1.7,0,0));
+scene.add(new THREE.AmbientLight(0x6f7fb0,.16));
+
+/* earth texture (procedural) */
+function earthTexture(){
+  const W=512,H=256,c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d'),im=x.createImageData(W,H);
+  const hs=(a,b,d)=>{const n=Math.sin(a*127.1+b*311.7+d*74.7)*43758.5453;return n-Math.floor(n)};
+  const vn=(X,Y,Z)=>{const xi=Math.floor(X),yi=Math.floor(Y),zi=Math.floor(Z),fx=X-xi,fy=Y-yi,fz=Z-zi;
+    const u=fx*fx*(3-2*fx),v=fy*fy*(3-2*fy),w=fz*fz*(3-2*fz);let r=0;
+    for(let i=0;i<2;i++)for(let j=0;j<2;j++)for(let k=0;k<2;k++)r+=hs(xi+i,yi+j,zi+k)*(i?u:1-u)*(j?v:1-v)*(k?w:1-w);return r};
+  for(let py=0;py<H;py++){const lat=(.5-py/H)*Math.PI;for(let px=0;px<W;px++){const lon=(px/W-.5)*2*Math.PI;
+    const X=Math.cos(lat)*Math.sin(lon),Y=Math.sin(lat),Z=Math.cos(lat)*Math.cos(lon);
+    let n=0,a=1,f=1.6;for(let o=0;o<5;o++){n+=a*vn(X*f+9,Y*f+9,Z*f+9);a*=.5;f*=2}n/=1.94;
+    let r,g,b;const al=Math.abs(lat)*57.3;
+    if(al>72){r=g=b=238}else if(n>.53){const h=Math.min(1,(n-.53)*5);r=60+h*90+(al>55?60:0);g=130-h*30+(al>55?50:0);b=60+h*20+(al>55?70:0)}
+    else{const d=Math.min(1,(.53-n)*4);r=20;g=70-d*30+25;b=150-d*40+25}
+    const i=(py*W+px)*4;im.data[i]=r;im.data[i+1]=g;im.data[i+2]=b;im.data[i+3]=255}}
+  x.putImageData(im,0,0);return new THREE.CanvasTexture(c)}
+
+/* planets */
+const TAU=Math.PI*2,labels=$('labels');
+const defs=[['عطارد',12,.4,0xb5a79a,88],['زهره',18,.9,0xe8c27a,225],['زمین',26,1.1,0xffffff,365.25],['مریخ',34,.6,0xc8603a,687],
+['مشتری',50,3,0xd9b38c,4333],['کیوان',66,2.5,0xe3cf9a,10759],['اورانوس',80,1.6,0x9fe0e6,30687],['نپتون',92,1.5,0x4a6ee0,60190]];
+const bodies=[];
+function label(t){const d=document.createElement('div');d.className='lbl';d.textContent=t;labels.appendChild(d);return d}
+const orbitLines=new THREE.Group();scene.add(orbitLines);
+defs.forEach((d,i)=>{
+  const [name,R,r,col,per]=d;
+  const piv=new THREE.Group();scene.add(piv);
+  const mat=new THREE.MeshStandardMaterial({color:col,roughness:.9});
+  if(name==='زمین')mat.map=earthTexture();
+  const m=new THREE.Mesh(new THREE.SphereGeometry(r,48,32),mat);
+  let tilt=null;
+  if(name==='زمین'){tilt=new THREE.Group();tilt.rotation.z=23.5*Math.PI/180;piv.add(tilt);tilt.add(m)}else piv.add(m);
+  if(name==='کیوان'){const ring=new THREE.Mesh(new THREE.RingGeometry(r*1.35,r*2.2,64),new THREE.MeshBasicMaterial({color:0xcdb98a,side:THREE.DoubleSide,transparent:true,opacity:.7}));
+    ring.rotation.x=Math.PI/2.2;piv.add(ring)}
+  const pts=[];for(let k=0;k<=160;k++){const a=k/160*TAU;pts.push(new THREE.Vector3(Math.cos(a)*R,0,-Math.sin(a)*R))}
+  orbitLines.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:name==='زمین'?0x5ec2ff:0x8aa0d8,transparent:true,opacity:name==='زمین'?.6:.28})));
+  bodies.push({name,R,per,a0:name==='زمین'?0:i*1.3,piv,m,lbl:label(name)});
+});
+const E=bodies[2],earthSpin=E.m,earthTilt=earthSpin.parent;
+/* red dot (about 35°N) */
+const dot=new THREE.Mesh(new THREE.SphereGeometry(.06,12,8),new THREE.MeshBasicMaterial({color:0xff2d2d}));
+const la=35*Math.PI/180;dot.position.set(0,Math.sin(la)*1.12,Math.cos(la)*1.12);earthSpin.add(dot);
+/* axis helpers */
+const axisG=new THREE.Group();axisG.visible=false;E.piv.add(axisG);
+const ax=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,-2.6,0),new THREE.Vector3(0,2.6,0)]),new THREE.LineBasicMaterial({color:0xff6b6b}));
+earthTilt.add(ax);
+const np=new THREE.Mesh(new THREE.SphereGeometry(.09,12,8),new THREE.MeshBasicMaterial({color:0xffe34d}));np.position.set(0,2.6,0);earthTilt.add(np);
+const vl=new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,-2.6,0),new THREE.Vector3(0,2.6,0)]),new THREE.LineDashedMaterial({color:0xffffff,dashSize:.15,gapSize:.12,transparent:true,opacity:.6}));
+vl.computeLineDistances();axisG.add(vl);
+axisG.add(ax.visible?new THREE.Group():new THREE.Group());
+ax.visible=np.visible=false;
+/* moon */
+const moon=new THREE.Mesh(new THREE.SphereGeometry(.3,24,16),new THREE.MeshStandardMaterial({color:0xbdbdbd,roughness:1}));
+E.piv.add(moon);const moonL=label('ماه');
+
+/* camera controls */
+let yaw=.5,pitch=.55,dist=150,tDist=150,blend=0,mode=0;const target=new THREE.Vector3();
+const ptrs=new Map();let pinch=0;
+canvas.addEventListener('pointerdown',e=>{canvas.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,[e.clientX,e.clientY]);pinch=0});
+canvas.addEventListener('pointerup',e=>ptrs.delete(e.pointerId));
+canvas.addEventListener('pointercancel',e=>ptrs.delete(e.pointerId));
+canvas.addEventListener('pointermove',e=>{
+  if(!ptrs.has(e.pointerId))return;const p=ptrs.get(e.pointerId);
+  if(ptrs.size===1){yaw-=(e.clientX-p[0])*.005;pitch=Math.max(-1.5,Math.min(1.5,pitch+(e.clientY-p[1])*.005))}
+  ptrs.set(e.pointerId,[e.clientX,e.clientY]);
+  if(ptrs.size===2){const [a,b]=[...ptrs.values()];const d=Math.hypot(a[0]-b[0],a[1]-b[1]);if(pinch)zoom(pinch/d);pinch=d}});
+function zoom(f){tDist=Math.max(2.2,Math.min(300,tDist*f))}
+canvas.addEventListener('wheel',e=>{e.preventDefault();zoom(Math.exp(e.deltaY*.0012))},{passive:false});
+
+/* sim state */
+let days=0,speed=365.25/20,paused=false,lastSpeed=speed;
+const SPD=[1/8,30/8,365.25/20];
+function setSpeed(i){speed=SPD[i];paused=false;$('sp').setAttribute('aria-pressed','false');[0,1,2].forEach(k=>$('s'+k).classList.toggle('on',k===i))}
+function viewAll(){mode=0;tDist=150;pitch=.55;$('vAll').classList.add('on');$('vEarth').classList.remove('on');setSpeed(2);orbitLines.visible=true;$('tOrb').setAttribute('aria-pressed','true')}
+function viewEarth(){mode=1;tDist=6;$('vAll').classList.remove('on');$('vEarth').classList.add('on');setSpeed(0)}
+$('vAll').onclick=viewAll;$('vEarth').onclick=viewEarth;
+$('vSide').onclick=()=>{if(!mode)viewEarth();yaw=0;pitch=.05;tDist=Math.max(tDist,9);axisG.visible=true;ax.visible=np.visible=true;$('tAxis').setAttribute('aria-pressed','true')};
+$('sp').onclick=()=>{paused=!paused;$('sp').setAttribute('aria-pressed',paused)};
+[0,1,2].forEach(i=>$('s'+i).onclick=()=>setSpeed(i));
+document.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{days=b.dataset.q*91.3125+.01;if(!mode){viewEarth();tDist=14}});
+$('tAxis').onclick=e=>{const on=e.currentTarget.getAttribute('aria-pressed')!=='true';e.currentTarget.setAttribute('aria-pressed',on);axisG.visible=on;ax.visible=np.visible=on};
+$('tOrb').onclick=e=>{const on=e.currentTarget.getAttribute('aria-pressed')!=='true';e.currentTarget.setAttribute('aria-pressed',on);orbitLines.visible=on};
+
+const fa=s=>String(s).replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d]);
+const months=['فروردین','اردیبهشت','خرداد','تیر','مرداد','شهریور','مهر','آبان','آذر','دی','بهمن','اسفند'],ml=[31,31,31,31,31,31,30,30,30,30,30,29];
+const seas=['تابستان','پاییز','زمستان','بهار'];
+const why=['قطب شمال به سمت خورشید کج شده؛ نور مستقیم‌تر می‌تابد و روزهای نیم‌کرهٔ شمالی بلندتر است.',
+'قطب شمال کم‌کم از خورشید فاصله می‌گیرد؛ نور مایل‌تر می‌شود و روزها کوتاه‌تر.',
+'قطب شمال از خورشید دور شده؛ نور مایل می‌تابد و روزها کوتاه است. در نیم‌کرهٔ جنوبی برعکس است.',
+'قطب شمال دوباره به سمت خورشید می‌چرخد؛ روزها بلندتر و هوا گرم‌تر می‌شود.'];
+
+const v=new THREE.Vector3(),ep=new THREE.Vector3(),tmp=new THREE.Vector3();
+function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}
+addEventListener('resize',resize);resize();
+function place(l,pos,show){v.copy(pos).project(camera);if(!show||v.z>1){l.style.display='none';return}
+  l.style.display='block';l.style.transform=`translate(${(v.x*.5+.5)*innerWidth}px,${(-v.y*.5+.5)*innerHeight}px) translate(-50%,-140%)`}
+
+let last=performance.now(),fc=0;
+function frame(t){
+  const dt=Math.min(.05,(t-last)/1000);last=t;
+  if(!paused)days+=dt*speed;
+  bodies.forEach(b=>{const a=b.a0+TAU*days/b.per;b.piv.position.set(Math.cos(a)*b.R,0,-Math.sin(a)*b.R)});
+  earthSpin.rotation.y=TAU*days;
+  const ma=TAU*days/27.32;moon.position.set(E.piv.position.x+Math.cos(ma)*2.6,0,E.piv.position.z-Math.sin(ma)*2.6);
+  sun.rotation.y+=dt*.1;
+  /* camera */
+  blend+=((mode?1:0)-blend)*(1-Math.exp(-dt*3));
+  const e=blend*blend*(3-2*blend);
+  target.copy(E.piv.position).multiplyScalar(e);
+  dist+=(tDist-dist)*(1-Math.exp(-dt*4));
+  camera.position.set(target.x+dist*Math.cos(pitch)*Math.sin(yaw),target.y+dist*Math.sin(pitch),target.z+dist*Math.cos(pitch)*Math.cos(yaw));
+  camera.lookAt(target);
+  /* labels */
+  bodies.forEach(b=>{const near=b.name==='زمین'?dist<9&&mode:false;place(b.lbl,b.piv.position,!near)});
+  place(moonL,moon.position,dist<14&&mode);
+  /* info */
+  if(++fc%5===0){
+    let idx=(93+Math.floor(days))%365,mo=0;while(idx>=ml[mo]){idx-=ml[mo];mo++}
+    $('date').textContent=fa(idx+1)+' '+months[mo];
+    const q=Math.floor(((days%365.25)/365.25)*4)%4;
+    $('sN').textContent=seas[q];$('sS').textContent=seas[(q+2)%4];$('why').textContent=why[q]+' (فصل‌ها از کجی محور می‌آیند، نه از فاصله با خورشید.)';
+    ep.copy(E.piv.position);dot.getWorldPosition(tmp);
+    const n=tmp.clone().sub(ep).normalize(),s=ep.clone().negate().normalize();
+    const day=n.dot(s)>.03;
+    const a=new THREE.Vector3(0,1,0).applyAxisAngle(new THREE.Vector3(0,0,1),23.5*Math.PI/180);
+    const s2=s.clone().sub(a.clone().multiplyScalar(s.dot(a))).normalize(),n2=n.clone().sub(a.clone().multiplyScalar(n.dot(a))).normalize();
+    const phi=Math.atan2(s2.clone().cross(n2).dot(a),s2.dot(n2));
+    const hr=((12+phi/TAU*24)%24+24)%24,hh=Math.floor(hr),mm=Math.floor((hr-hh)*60);
+    $('dot').textContent=(day?'روز ☀️':'شب 🌙')+' · ساعت '+fa(String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0'));
+  }
+  renderer.render(scene,camera);requestAnimationFrame(frame)}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
